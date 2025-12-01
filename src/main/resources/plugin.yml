@@ -1,0 +1,4 @@
+name: Claims
+version: '1.0-SNAPSHOT'
+main: Claims.claims.Claims
+api-version: '1.21'
