@@ -2,3 +2,34 @@ name: Claims
 version: '1.0-SNAPSHOT'
 main: Claims.claims.Claims
 api-version: '1.21'
+authors: [MrRafaa]
+description: A land claiming and party system plugin.
+
+commands:
+  claim:
+    description: Main command for land claiming
+    usage: /claim <subcommand>
+    aliases: [c, land]
+    permission: claims.use
+  party:
+    description: Main command for party management
+    usage: /party <subcommand>
+    aliases: [p, team]
+    permission: party.use
+
+permissions:
+  claims.use:
+    description: Allows use of basic claim commands
+    default: true
+  claims.admin:
+    description: Allows administrative control over claims
+    default: op
+  claims.admin.bypass:
+    description: Allows bypassing claim protections
+    default: op
+  party.use:
+    description: Allows use of party commands
+    default: true
+  party.admin:
+    description: Allows administrative control over parties
+    default: op
