@@ -1,0 +1,32 @@
+# Claims Plugin Configuration
+
+# Maximum number of claims a player can own
+max-claims-per-player: 3
+
+# Maximum area (blocks) of a single claim
+max-claim-area: 2500
+
+# The item used to create claims (Golden Shovel by default)
+claim-item:
+  material: GOLDEN_SHOVEL
+  name: "&eClaim Tool"
+
+# Minimum distance (in blocks) between claims
+claim-block-buffer: 10
+
+# Party Settings
+max-party-members: 10
+party-invite-timeout: 60 # Seconds
+
+# PvP Settings
+pvp-in-claims: false
+
+# Protection Settings (true = protected/prevented)
+protection:
+  block-break: true
+  block-place: true
+  entity-damage: true
+  explosion: true
+  fire-spread: true
+  mob-griefing: true
+  piston: true
