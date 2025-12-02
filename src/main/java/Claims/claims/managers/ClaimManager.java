@@ -13,10 +13,23 @@ public class ClaimManager {
     private final Claims plugin;
     private final Map<UUID, Claim> claims = new ConcurrentHashMap<>();
     private final Map<UUID, PlayerData> playerData = new ConcurrentHashMap<>();
+    private final Map<UUID, String> pendingNames = new ConcurrentHashMap<>();
 
     public ClaimManager(Claims plugin) {
         this.plugin = plugin;
         loadData();
+    }
+
+    public void setPendingName(UUID playerId, String name) {
+        pendingNames.put(playerId, name);
+    }
+
+    public String getPendingName(UUID playerId) {
+        return pendingNames.get(playerId);
+    }
+
+    public void removePendingName(UUID playerId) {
+        pendingNames.remove(playerId);
     }
 
     private void loadData() {
@@ -79,7 +92,7 @@ public class ClaimManager {
         return null;
     }
 
-    public boolean createClaim(Player player, Location min, Location max) {
+    public boolean createClaim(Player player, Location min, Location max, String name) {
         if (!min.getWorld().equals(max.getWorld()))
             return false;
 
@@ -127,7 +140,13 @@ public class ClaimManager {
             }
         }
 
-        Claim newClaim = new Claim(player.getUniqueId(), min.getWorld().getName(), minX, minZ, maxX, maxZ);
+        // Check name uniqueness
+        if (name != null && getClaimByName(player.getUniqueId(), name) != null) {
+            player.sendMessage("§cYou already have a claim with that name.");
+            return false;
+        }
+
+        Claim newClaim = new Claim(player.getUniqueId(), min.getWorld().getName(), minX, minZ, maxX, maxZ, name);
         claims.put(newClaim.getId(), newClaim);
 
         data.incrementClaimCount();
@@ -144,6 +163,46 @@ public class ClaimManager {
         }
     }
 
+    public void deleteAllClaims(UUID ownerId) {
+        List<UUID> toRemove = new ArrayList<>();
+        for (Claim claim : claims.values()) {
+            if (claim.getOwnerId().equals(ownerId)) {
+                toRemove.add(claim.getId());
+            }
+        }
+        for (UUID id : toRemove) {
+            deleteClaim(id);
+        }
+    }
+
+    public Claim getClaimByName(UUID ownerId, String name) {
+        for (Claim claim : claims.values()) {
+            if (claim.getOwnerId().equals(ownerId) &&
+                    (claim.getName() != null && claim.getName().equalsIgnoreCase(name))) {
+                return claim;
+            }
+        }
+        return null;
+    }
+
+    public void trustAll(Player owner, UUID targetId) {
+        for (Claim claim : claims.values()) {
+            if (claim.getOwnerId().equals(owner.getUniqueId())) {
+                claim.addTrustedPlayer(targetId);
+            }
+        }
+        saveData();
+    }
+
+    public void untrustAll(Player owner, UUID targetId) {
+        for (Claim claim : claims.values()) {
+            if (claim.getOwnerId().equals(owner.getUniqueId())) {
+                claim.removeTrustedPlayer(targetId);
+            }
+        }
+        saveData();
+    }
+
     private boolean isOverlapping(int minX1, int minZ1, int maxX1, int maxZ1, Claim c2) {
         return minX1 <= c2.getMaxX() && maxX1 >= c2.getMinX() &&
                 minZ1 <= c2.getMaxZ() && maxZ1 >= c2.getMinZ();
@@ -152,5 +211,10 @@ public class ClaimManager {
     private boolean isTooClose(int minX1, int minZ1, int maxX1, int maxZ1, Claim c2, int buffer) {
         return minX1 - buffer <= c2.getMaxX() && maxX1 + buffer >= c2.getMinX() &&
                 minZ1 - buffer <= c2.getMaxZ() && maxZ1 + buffer >= c2.getMinZ();
+    }
+
+    public void setPlayerClaimLimit(UUID playerId, int limit) {
+        getPlayerData(playerId).setMaxClaims(limit);
+        saveData();
     }
 }

@@ -2,7 +2,7 @@ package Claims.claims.managers;
 
 import Claims.claims.Claims;
 import Claims.claims.models.Party;
-import Claims.claims.models.PlayerData;
+
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -103,5 +103,60 @@ public class PartyManager {
         party.addMember(player.getUniqueId());
         saveParties();
         return true;
+    }
+
+    public void leaveParty(Player player) {
+        Party party = getPlayerParty(player.getUniqueId());
+        if (party == null)
+            return;
+
+        if (party.getOwnerId().equals(player.getUniqueId())) {
+            disbandParty(party);
+            player.sendMessage("§cParty disbanded because you left.");
+        } else {
+            party.removeMember(player.getUniqueId());
+            player.sendMessage("§cYou left the party.");
+            saveParties();
+        }
+    }
+
+    public void kickPlayer(Player owner, String targetName) {
+        Party party = getPlayerParty(owner.getUniqueId());
+        if (party == null || !party.getOwnerId().equals(owner.getUniqueId())) {
+            owner.sendMessage("§cYou are not the owner of a party.");
+            return;
+        }
+
+        Player target = Bukkit.getPlayer(targetName);
+        UUID targetId = target != null ? target.getUniqueId() : null;
+
+        // If offline, we might need to look up UUID, but for now simple online check or
+        // iterate members
+        if (targetId == null) {
+            // Try to find by name in members (inefficient but works for small parties)
+            for (UUID memberId : party.getMembers()) {
+                if (Bukkit.getOfflinePlayer(memberId).getName().equalsIgnoreCase(targetName)) {
+                    targetId = memberId;
+                    break;
+                }
+            }
+        }
+
+        if (targetId == null || !party.isMember(targetId)) {
+            owner.sendMessage("§cPlayer not found in party.");
+            return;
+        }
+
+        if (targetId.equals(owner.getUniqueId())) {
+            owner.sendMessage("§cYou cannot kick yourself.");
+            return;
+        }
+
+        party.removeMember(targetId);
+        owner.sendMessage("§aKicked " + targetName);
+        if (target != null) {
+            target.sendMessage("§cYou were kicked from the party.");
+        }
+        saveParties();
     }
 }

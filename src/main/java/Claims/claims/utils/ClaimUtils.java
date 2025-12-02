@@ -1,14 +1,9 @@
 package Claims.claims.utils;
 
 import Claims.claims.models.Claim;
-import org.bukkit.Chunk;
-import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class ClaimUtils {
 

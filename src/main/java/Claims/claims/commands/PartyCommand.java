@@ -1,6 +1,7 @@
 package Claims.claims.commands;
 
 import Claims.claims.Claims;
+import Claims.claims.gui.PartyGui;
 import Claims.claims.models.Party;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -11,7 +12,6 @@ import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 public class PartyCommand implements CommandExecutor, TabCompleter {
     private final Claims plugin;
@@ -39,12 +39,18 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage("§cUsage: /party create <name>");
                     return true;
                 }
-                if (plugin.getPartyManager().createParty(player, args[1]) != null) {
-                    player.sendMessage("§aParty created!");
+                String partyName = args[1];
+                if (partyName.length() > 12) {
+                    player.sendMessage("§cParty name cannot exceed 12 characters.");
+                    return true;
+                }
+                if (plugin.getPartyManager().createParty(player, partyName) != null) {
+                    player.sendMessage("§aParty '" + partyName + "' created!");
                 } else {
-                    player.sendMessage("§cFailed to create party (already in one?).");
+                    player.sendMessage("§cYou are already in a party or name is taken.");
                 }
                 break;
+
             case "invite":
                 if (args.length < 2) {
                     player.sendMessage("§cUsage: /party invite <player>");
@@ -63,6 +69,7 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage("§cFailed to invite.");
                 }
                 break;
+
             case "accept":
                 if (plugin.getPartyManager().acceptInvite(player)) {
                     player.sendMessage("§aJoined party!");
@@ -70,20 +77,33 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage("§cNo pending invite.");
                 }
                 break;
+
+            case "leave":
+                plugin.getPartyManager().leaveParty(player);
+                break;
+
+            case "kick":
+                if (args.length < 2) {
+                    player.sendMessage("§cUsage: /party kick <player>");
+                    return true;
+                }
+                plugin.getPartyManager().kickPlayer(player, args[1]);
+                break;
+
             case "info":
+            case "gui":
                 Party party = plugin.getPartyManager().getPlayerParty(player.getUniqueId());
                 if (party == null) {
                     player.sendMessage("§cYou are not in a party.");
                     return true;
                 }
-                player.sendMessage("§6--- Party Info ---");
-                player.sendMessage("§eName: " + party.getName());
-                player.sendMessage("§eOwner: " + Bukkit.getOfflinePlayer(party.getOwnerId()).getName());
-                player.sendMessage("§eMembers: " + party.getMembers().size());
+                new PartyGui(plugin, player, party);
                 break;
+
             default:
                 sendHelp(player);
         }
+
         return true;
     }
 
@@ -92,7 +112,9 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
         player.sendMessage("§e/party create <name>");
         player.sendMessage("§e/party invite <player>");
         player.sendMessage("§e/party accept");
-        player.sendMessage("§e/party info");
+        player.sendMessage("§e/party leave");
+        player.sendMessage("§e/party kick <player>");
+        player.sendMessage("§e/party info §7- Open Party GUI");
     }
 
     @Override
@@ -102,6 +124,8 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
             completions.add("create");
             completions.add("invite");
             completions.add("accept");
+            completions.add("leave");
+            completions.add("kick");
             completions.add("info");
         }
         return completions;

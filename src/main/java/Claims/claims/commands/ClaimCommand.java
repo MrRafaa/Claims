@@ -1,7 +1,10 @@
 package Claims.claims.commands;
 
 import Claims.claims.Claims;
-import Claims.claims.managers.ClaimManager;
+import Claims.claims.gui.AdminGui;
+import Claims.claims.gui.ClaimDetailGui;
+import Claims.claims.gui.ConfirmationGui;
+import Claims.claims.gui.PlayerClaimsGui;
 import Claims.claims.models.Claim;
 import Claims.claims.utils.ClaimTool;
 import org.bukkit.Bukkit;
@@ -31,37 +34,44 @@ public class ClaimCommand implements CommandExecutor, TabCompleter {
         Player player = (Player) sender;
 
         if (args.length == 0) {
-            sendHelp(player);
+            sendHelp(player, null);
             return true;
         }
 
         switch (args[0].toLowerCase()) {
             case "create":
+                if (args.length < 2) {
+                    player.sendMessage("§cUsage: /claim create <name>");
+                    return true;
+                }
+                String name = args[1];
+                if (name.length() > 12) {
+                    player.sendMessage("§cClaim name cannot exceed 12 characters.");
+                    return true;
+                }
+                if (plugin.getClaimManager().getClaimByName(player.getUniqueId(), name) != null) {
+                    player.sendMessage("§cYou already have a claim with that name.");
+                    return true;
+                }
+                plugin.getClaimManager().setPendingName(player.getUniqueId(), name);
                 player.getInventory().addItem(ClaimTool.getTool());
-                player.sendMessage("§aReceived claim tool!");
+                player.sendMessage("§aReceived claim tool! Right click corners to claim '" + name + "'.");
                 break;
             case "delete":
-                handleDelete(player);
+                handleDelete(player, args);
                 break;
             case "info":
                 handleInfo(player);
                 break;
             case "list":
-                handleList(player);
+                new PlayerClaimsGui(plugin, player, plugin.getClaimManager().getPlayerClaims(player.getUniqueId()))
+                        .open();
                 break;
             case "trust":
-                if (args.length < 2) {
-                    player.sendMessage("§cUsage: /claim trust <player>");
-                    return true;
-                }
-                handleTrust(player, args[1], true);
+                handleTrust(player, args, true);
                 break;
             case "untrust":
-                if (args.length < 2) {
-                    player.sendMessage("§cUsage: /claim untrust <player>");
-                    return true;
-                }
-                handleTrust(player, args[1], false);
+                handleTrust(player, args, false);
                 break;
             case "admin":
                 if (!player.hasPermission("claims.admin")) {
@@ -69,13 +79,16 @@ public class ClaimCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 if (args.length < 2) {
-                    player.sendMessage("§cUsage: /claim admin <delete|bypass|setlimit|setarealimit>");
+                    new AdminGui(plugin, player, null).open();
                     return true;
                 }
                 handleAdmin(player, args);
                 break;
+            case "help":
+                sendHelp(player, args.length > 1 ? args[1] : null);
+                break;
             default:
-                player.sendMessage("§cUnknown subcommand. Type /claim help for a list of commands.");
+                sendHelp(player, null);
         }
         return true;
     }
@@ -89,11 +102,7 @@ public class ClaimCommand implements CommandExecutor, TabCompleter {
                         player.sendMessage("§cPlayer not found.");
                         return;
                     }
-                    List<Claim> targetClaims = new ArrayList<>(
-                            plugin.getClaimManager().getPlayerClaims(target.getUniqueId()));
-                    for (Claim c : targetClaims) {
-                        plugin.getClaimManager().deleteClaim(c.getId());
-                    }
+                    plugin.getClaimManager().deleteAllClaims(target.getUniqueId());
                     player.sendMessage("§aDeleted all claims for " + target.getName());
                 } else {
                     Claim claim = plugin.getClaimManager().getClaimAt(player.getLocation());
@@ -120,28 +129,8 @@ public class ClaimCommand implements CommandExecutor, TabCompleter {
                 }
                 try {
                     int limit = Integer.parseInt(args[3]);
-                    plugin.getClaimManager().getPlayerData(targetLimit.getUniqueId()).setMaxClaims(limit);
-                    plugin.getClaimManager().saveData();
+                    plugin.getClaimManager().setPlayerClaimLimit(targetLimit.getUniqueId(), limit);
                     player.sendMessage("§aSet max claims for " + targetLimit.getName() + " to " + limit);
-                } catch (NumberFormatException e) {
-                    player.sendMessage("§cInvalid number.");
-                }
-                break;
-            case "setarealimit":
-                if (args.length < 4) {
-                    player.sendMessage("§cUsage: /claim admin setarealimit <player> <amount>");
-                    return;
-                }
-                Player targetArea = Bukkit.getPlayer(args[2]);
-                if (targetArea == null) {
-                    player.sendMessage("§cPlayer not found.");
-                    return;
-                }
-                try {
-                    int limit = Integer.parseInt(args[3]);
-                    plugin.getClaimManager().getPlayerData(targetArea.getUniqueId()).setMaxClaimArea(limit);
-                    plugin.getClaimManager().saveData();
-                    player.sendMessage("§aSet max claim area for " + targetArea.getName() + " to " + limit);
                 } catch (NumberFormatException e) {
                     player.sendMessage("§cInvalid number.");
                 }
@@ -151,18 +140,47 @@ public class ClaimCommand implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void handleDelete(Player player) {
-        Claim claim = plugin.getClaimManager().getClaimAt(player.getLocation());
-        if (claim == null) {
-            player.sendMessage("§cNo claim here.");
-            return;
+    private void handleDelete(Player player, String[] args) {
+        if (args.length > 1) {
+            String target = args[1];
+            if (target.equalsIgnoreCase("all")) {
+                new ConfirmationGui(player, "Delete ALL Claims?", (confirmed) -> {
+                    if (confirmed) {
+                        plugin.getClaimManager().deleteAllClaims(player.getUniqueId());
+                        player.sendMessage("§aDeleted all your claims.");
+                    }
+                });
+                return;
+            }
+            // Delete by name
+            Claim claim = plugin.getClaimManager().getClaimByName(player.getUniqueId(), target);
+            if (claim != null) {
+                new ConfirmationGui(player, "Delete '" + target + "'?", (confirmed) -> {
+                    if (confirmed) {
+                        plugin.getClaimManager().deleteClaim(claim.getId());
+                        player.sendMessage("§aDeleted claim '" + target + "'.");
+                    }
+                });
+                return;
+            }
+            player.sendMessage("§cClaim '" + target + "' not found.");
+        } else {
+            Claim claim = plugin.getClaimManager().getClaimAt(player.getLocation());
+            if (claim == null) {
+                player.sendMessage("§cNo claim here.");
+                return;
+            }
+            if (!claim.getOwnerId().equals(player.getUniqueId()) && !player.hasPermission("claims.admin")) {
+                player.sendMessage("§cYou don't own this claim.");
+                return;
+            }
+            new ConfirmationGui(player, "Delete Claim Here?", (confirmed) -> {
+                if (confirmed) {
+                    plugin.getClaimManager().deleteClaim(claim.getId());
+                    player.sendMessage("§aClaim deleted.");
+                }
+            });
         }
-        if (!claim.getOwnerId().equals(player.getUniqueId()) && !player.hasPermission("claims.admin")) {
-            player.sendMessage("§cYou don't own this claim.");
-            return;
-        }
-        plugin.getClaimManager().deleteClaim(claim.getId());
-        player.sendMessage("§aClaim deleted.");
     }
 
     private void handleInfo(Player player) {
@@ -171,25 +189,42 @@ public class ClaimCommand implements CommandExecutor, TabCompleter {
             player.sendMessage("§cNo claim here.");
             return;
         }
-        player.sendMessage("§6--- Claim Info ---");
-        player.sendMessage("§eOwner: " + Bukkit.getOfflinePlayer(claim.getOwnerId()).getName());
-        player.sendMessage(
-                "§eArea: " + ((claim.getMaxX() - claim.getMinX() + 1) * (claim.getMaxZ() - claim.getMinZ() + 1)));
+        new ClaimDetailGui(plugin, player, claim);
     }
 
-    private void handleList(Player player) {
-        List<Claim> claims = plugin.getClaimManager().getPlayerClaims(player.getUniqueId());
-        if (claims.isEmpty()) {
-            player.sendMessage("§eYou have no claims.");
+    private void handleTrust(Player player, String[] args, boolean trust) {
+        if (args.length < 2) {
+            // List trusted
+            Claim claim = plugin.getClaimManager().getClaimAt(player.getLocation());
+            if (claim == null) {
+                player.sendMessage("§cNo claim here.");
+                return;
+            }
+            List<String> trustedNames = new ArrayList<>();
+            for (UUID uuid : claim.getTrustedPlayers()) {
+                trustedNames.add(Bukkit.getOfflinePlayer(uuid).getName());
+            }
+            player.sendMessage(
+                    "§eTrusted players: " + (trustedNames.isEmpty() ? "None" : String.join(", ", trustedNames)));
             return;
         }
-        player.sendMessage("§6--- Your Claims ---");
-        for (Claim claim : claims) {
-            player.sendMessage("§e- " + claim.getWorldName() + " (" + claim.getMinX() + ", " + claim.getMinZ() + ")");
-        }
-    }
 
-    private void handleTrust(Player player, String targetName, boolean trust) {
+        String targetName = args[1];
+        if (args.length > 2 && args[2].equalsIgnoreCase("all")) {
+            Player target = Bukkit.getPlayer(targetName);
+            if (target == null) {
+                player.sendMessage("§cPlayer not found.");
+                return;
+            }
+            if (trust)
+                plugin.getClaimManager().trustAll(player, target.getUniqueId());
+            else
+                plugin.getClaimManager().untrustAll(player, target.getUniqueId());
+            player.sendMessage(
+                    "§a" + (trust ? "Trusted " : "Untrusted ") + target.getName() + " on all your claims.");
+            return;
+        }
+
         Claim claim = plugin.getClaimManager().getClaimAt(player.getLocation());
         if (claim == null) {
             player.sendMessage("§cNo claim here.");
@@ -215,18 +250,15 @@ public class ClaimCommand implements CommandExecutor, TabCompleter {
         plugin.getClaimManager().saveData();
     }
 
-    private void sendHelp(Player player) {
+    private void sendHelp(Player player, String topic) {
         player.sendMessage("§6--- Claim Help ---");
-        player.sendMessage("§e/claim create §7- Get claim tool");
-        player.sendMessage("§e/claim delete §7- Delete claim at your location");
-        player.sendMessage("§e/claim info §7- View info about claim at location");
-        player.sendMessage("§e/claim list §7- List your claims");
-        player.sendMessage("§e/claim trust <player> §7- Trust a player");
-        player.sendMessage("§e/claim untrust <player> §7- Untrust a player");
+        player.sendMessage("§e/claim create <name> §7- Get claim tool");
+        player.sendMessage("§e/claim list §7- Manage your claims (GUI)");
+        player.sendMessage("§e/claim trust | untrust <player> [all] §7- Manage trust");
+        player.sendMessage("§e/claim info §7- View claim info");
+        player.sendMessage("§e/party §7- Party commands");
         if (player.hasPermission("claims.admin")) {
-            player.sendMessage("§c/claim admin delete [player] §7- Delete claim(s)");
-            player.sendMessage("§c/claim admin setlimit <player> <amount> §7- Set max claims");
-            player.sendMessage("§c/claim admin setarealimit <player> <amount> §7- Set max area");
+            player.sendMessage("§c/claim admin §7- Open Admin GUI");
         }
     }
 
@@ -243,10 +275,6 @@ public class ClaimCommand implements CommandExecutor, TabCompleter {
             if (sender.hasPermission("claims.admin")) {
                 completions.add("admin");
             }
-        } else if (args.length == 2 && args[0].equalsIgnoreCase("admin")) {
-            completions.add("delete");
-            completions.add("setlimit");
-            completions.add("setarealimit");
         }
         return completions;
     }

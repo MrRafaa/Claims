@@ -18,8 +18,9 @@ public class Claim {
     private final long creationTime;
     private UUID partyId;
     private final Set<UUID> trustedPlayers;
+    private String name;
 
-    public Claim(UUID ownerId, String worldName, int minX, int minZ, int maxX, int maxZ) {
+    public Claim(UUID ownerId, String worldName, int minX, int minZ, int maxX, int maxZ, String name) {
         this.id = UUID.randomUUID();
         this.ownerId = ownerId;
         this.worldName = worldName;
@@ -29,6 +30,15 @@ public class Claim {
         this.maxZ = maxZ;
         this.creationTime = System.currentTimeMillis();
         this.trustedPlayers = new HashSet<>();
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public UUID getId() {

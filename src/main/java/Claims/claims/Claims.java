@@ -7,6 +7,7 @@ import Claims.claims.config.MessageManager;
 import Claims.claims.listeners.ClaimCreationListener;
 import Claims.claims.listeners.ClaimProtectionListener;
 import Claims.claims.listeners.ClaimVisualizationListener;
+import Claims.claims.listeners.GuiListener;
 import Claims.claims.listeners.PartyListener;
 import Claims.claims.managers.ClaimManager;
 import Claims.claims.managers.PartyManager;
@@ -47,6 +48,7 @@ public class Claims extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new ClaimCreationListener(this), this);
         getServer().getPluginManager().registerEvents(new PartyListener(this), this);
         getServer().getPluginManager().registerEvents(new ClaimVisualizationListener(this), this);
+        getServer().getPluginManager().registerEvents(new GuiListener(this), this);
 
         // Auto-save task
         Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {

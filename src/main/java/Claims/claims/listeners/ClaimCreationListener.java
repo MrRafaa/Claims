@@ -53,9 +53,16 @@ public class ClaimCreationListener implements Listener {
             int area = (Math.abs(loc1.getBlockX() - loc2.getBlockX()) + 1)
                     * (Math.abs(loc1.getBlockZ() - loc2.getBlockZ()) + 1);
 
-            if (plugin.getClaimManager().createClaim(player, loc1, loc2)) {
-                player.sendMessage("§aClaim created! Area: " + area + " blocks.");
+            String name = plugin.getClaimManager().getPendingName(player.getUniqueId());
+            if (name == null) {
+                player.sendMessage("§cYou must set a name for your claim first using /claim create <name>.");
+                return;
+            }
+
+            if (plugin.getClaimManager().createClaim(player, loc1, loc2, name)) {
+                player.sendMessage("§aClaim '" + name + "' created! Area: " + area + " blocks.");
                 firstPoints.remove(player.getUniqueId());
+                plugin.getClaimManager().removePendingName(player.getUniqueId());
             } else {
                 player.sendMessage(
                         "§cCould not create claim. Overlap, limit reached, too big, or too close to others.");
