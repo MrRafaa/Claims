@@ -46,6 +46,7 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
                 }
                 if (plugin.getPartyManager().createParty(player, partyName) != null) {
                     player.sendMessage("§aParty '" + partyName + "' created!");
+                    player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f);
                 } else {
                     player.sendMessage("§cYou are already in a party or name is taken.");
                 }
@@ -63,16 +64,22 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
                 }
                 if (plugin.getPartyManager().invitePlayer(player, target)) {
                     player.sendMessage("§aInvited " + target.getName());
-                    target.sendMessage("§aYou have been invited to join " + player.getName()
-                            + "'s party. Type /party accept to join.");
+                    if (plugin.getPartyManager().getPlayerParty(target.getUniqueId()) != null) {
+                        target.sendMessage("§aYou have been invited to join " + player.getName()
+                                + "'s party. §eAccepting will leave your current party.");
+                    } else {
+                        target.sendMessage("§aYou have been invited to join " + player.getName()
+                                + "'s party. Type /party accept to join.");
+                    }
                 } else {
-                    player.sendMessage("§cFailed to invite.");
+                    player.sendMessage("§cFailed to invite. Party full or player already invited.");
                 }
                 break;
 
             case "accept":
                 if (plugin.getPartyManager().acceptInvite(player)) {
                     player.sendMessage("§aJoined party!");
+                    player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f);
                 } else {
                     player.sendMessage("§cNo pending invite.");
                 }
@@ -97,7 +104,7 @@ public class PartyCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage("§cYou are not in a party.");
                     return true;
                 }
-                new PartyGui(plugin, player, party);
+                new PartyGui(plugin, player, party).open();
                 break;
 
             default:

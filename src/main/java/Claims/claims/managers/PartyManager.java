@@ -72,8 +72,9 @@ public class PartyManager {
             return false;
         if (party.getMembers().size() >= plugin.getConfigManager().getMaxPartyMembers())
             return false;
-        if (getPlayerParty(target.getUniqueId()) != null)
-            return false;
+        // Allow inviting even if in party, they will leave upon accepting
+        // if (getPlayerParty(target.getUniqueId()) != null)
+        // return false;
 
         pendingInvites.put(target.getUniqueId(), party.getId());
 
@@ -100,6 +101,13 @@ public class PartyManager {
         if (party == null)
             return false;
 
+        // Leave current party if in one
+        Party currentParty = getPlayerParty(player.getUniqueId());
+        if (currentParty != null) {
+            leaveParty(player);
+            player.sendMessage("§eLeft previous party to join new one.");
+        }
+
         party.addMember(player.getUniqueId());
         saveParties();
         return true;
@@ -111,12 +119,36 @@ public class PartyManager {
             return;
 
         if (party.getOwnerId().equals(player.getUniqueId())) {
-            disbandParty(party);
-            player.sendMessage("§cParty disbanded because you left.");
+            if (party.getMembers().size() > 1) {
+                assignNewLeader(party);
+                party.removeMember(player.getUniqueId());
+                player.sendMessage("§cYou left the party. A new leader has been assigned.");
+                saveParties();
+            } else {
+                disbandParty(party);
+                player.sendMessage("§cParty disbanded because you left.");
+            }
         } else {
             party.removeMember(player.getUniqueId());
             player.sendMessage("§cYou left the party.");
             saveParties();
+        }
+    }
+
+    private void assignNewLeader(Party party) {
+        // Find a member who is not the current owner (which is everyone else since
+        // owner is leaving,
+        // but technically owner is still in list when this is called)
+        // Actually, we should pick someone else.
+        for (UUID memberId : party.getMembers()) {
+            if (!memberId.equals(party.getOwnerId())) {
+                party.setOwnerId(memberId);
+                Player newLeader = Bukkit.getPlayer(memberId);
+                if (newLeader != null) {
+                    newLeader.sendMessage("§aYou are now the party leader!");
+                }
+                break; // Just pick the first one found
+            }
         }
     }
 

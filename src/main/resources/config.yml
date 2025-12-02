@@ -18,6 +18,9 @@ claim-block-buffer: 10
 max-party-members: 10
 party-invite-timeout: 60 # Seconds
 
+# Trust Settings
+max-trusted: 10
+
 # PvP Settings
 pvp-in-claims: false
 
@@ -29,4 +32,6 @@ protection:
   explosion: true
   fire-spread: true
   mob-griefing: true
-  piston: true
+
+
+

@@ -54,13 +54,47 @@ public class AdminGui extends PaginatedGui {
             if (meta != null) {
                 String name = claim.getName() != null ? claim.getName() : "Unnamed Claim";
                 meta.setDisplayName("§a" + name);
+
+                List<String> trustedNames = new ArrayList<>();
+                for (UUID trusted : claim.getTrustedPlayers()) {
+                    trustedNames.add(Bukkit.getOfflinePlayer(trusted).getName());
+                }
+                String trustedList = trustedNames.isEmpty() ? "None" : String.join(", ", trustedNames);
+                int area = (claim.getMaxX() - claim.getMinX() + 1) * (claim.getMaxZ() - claim.getMinZ() + 1);
+
                 meta.setLore(Arrays.asList(
                         "§7World: " + claim.getWorldName(),
                         "§7X: " + claim.getMinX() + " Z: " + claim.getMinZ(),
-                        "§cClick to delete"));
+                        "§7Area: " + area + " blocks",
+                        "§7Trusted: " + trustedList,
+                        "",
+                        "§eLeft-Click to Teleport",
+                        "§cRight-Click to Delete"));
                 stack.setItemMeta(meta);
             }
             return stack;
+        }
+    }
+
+    @Override
+    protected void updateInventory() {
+        super.updateInventory();
+        if (targetPlayer != null) {
+            ItemStack returnItem = new ItemStack(Material.ARROW);
+            ItemMeta meta = returnItem.getItemMeta();
+            if (meta != null) {
+                meta.setDisplayName("§eReturn");
+                returnItem.setItemMeta(meta);
+            }
+            inventory.setItem(49, returnItem);
+        }
+    }
+
+    @Override
+    public void handleClick(InventoryClickEvent event) {
+        super.handleClick(event);
+        if (targetPlayer != null && event.getSlot() == 49) {
+            new AdminGui(plugin, player, null).open();
         }
     }
 
@@ -71,15 +105,32 @@ public class AdminGui extends PaginatedGui {
             new AdminGui(plugin, player, ownerId).open();
         } else {
             Claim claim = (Claim) item;
-            new ConfirmationGui(player, "Delete Claim?", (confirmed) -> {
-                if (confirmed) {
-                    plugin.getClaimManager().deleteClaim(claim.getId());
-                    player.sendMessage("§aClaim deleted.");
-                    new AdminGui(plugin, player, targetPlayer).open(); // Refresh
+            if (event.isLeftClick()) {
+                // Teleport
+                org.bukkit.World world = Bukkit.getWorld(claim.getWorldName());
+                if (world != null) {
+                    // Teleport to the center or min corner + 1 up
+                    int x = (claim.getMinX() + claim.getMaxX()) / 2;
+                    int z = (claim.getMinZ() + claim.getMaxZ()) / 2;
+                    int y = world.getHighestBlockYAt(x, z) + 1;
+                    player.teleport(new org.bukkit.Location(world, x, y, z));
+                    player.sendMessage(
+                            "§aTeleported to claim '" + (claim.getName() != null ? claim.getName() : "Unnamed") + "'.");
+                    player.closeInventory();
                 } else {
-                    new AdminGui(plugin, player, targetPlayer).open();
+                    player.sendMessage("§cWorld not loaded.");
                 }
-            });
+            } else if (event.isRightClick()) {
+                new ConfirmationGui(player, "Delete Claim?", (confirmed) -> {
+                    if (confirmed) {
+                        plugin.getClaimManager().deleteClaim(claim.getId());
+                        player.sendMessage("§aClaim deleted.");
+                        new AdminGui(plugin, player, targetPlayer).open(); // Refresh
+                    } else {
+                        new AdminGui(plugin, player, targetPlayer).open();
+                    }
+                });
+            }
         }
     }
 }

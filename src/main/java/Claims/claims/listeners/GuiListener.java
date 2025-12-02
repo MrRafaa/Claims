@@ -20,6 +20,10 @@ public class GuiListener implements Listener {
         InventoryHolder holder = event.getInventory().getHolder();
         if (holder instanceof ClaimsGui) {
             event.setCancelled(true);
+            if (event.getWhoClicked() instanceof org.bukkit.entity.Player) {
+                ((org.bukkit.entity.Player) event.getWhoClicked()).playSound(event.getWhoClicked().getLocation(),
+                        org.bukkit.Sound.UI_BUTTON_CLICK, 1.0f, 1.0f);
+            }
             ((ClaimsGui) holder).handleClick(event);
         }
     }

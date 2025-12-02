@@ -15,9 +15,49 @@ public class ClaimManager {
     private final Map<UUID, PlayerData> playerData = new ConcurrentHashMap<>();
     private final Map<UUID, String> pendingNames = new ConcurrentHashMap<>();
 
+    private final Map<Long, Set<UUID>> chunkClaims = new ConcurrentHashMap<>();
+
     public ClaimManager(Claims plugin) {
         this.plugin = plugin;
         loadData();
+    }
+
+    private long getChunkKey(int x, int z) {
+        return (long) (x >> 4) & 0xffffffffL | ((long) (z >> 4) & 0xffffffffL) << 32;
+    }
+
+    private void addToChunks(Claim claim) {
+        int minChunkX = claim.getMinX() >> 4;
+        int minChunkZ = claim.getMinZ() >> 4;
+        int maxChunkX = claim.getMaxX() >> 4;
+        int maxChunkZ = claim.getMaxZ() >> 4;
+
+        for (int x = minChunkX; x <= maxChunkX; x++) {
+            for (int z = minChunkZ; z <= maxChunkZ; z++) {
+                long key = getChunkKey(x * 16, z * 16);
+                chunkClaims.computeIfAbsent(key, k -> ConcurrentHashMap.newKeySet()).add(claim.getId());
+            }
+        }
+    }
+
+    private void removeFromChunks(Claim claim) {
+        int minChunkX = claim.getMinX() >> 4;
+        int minChunkZ = claim.getMinZ() >> 4;
+        int maxChunkX = claim.getMaxX() >> 4;
+        int maxChunkZ = claim.getMaxZ() >> 4;
+
+        for (int x = minChunkX; x <= maxChunkX; x++) {
+            for (int z = minChunkZ; z <= maxChunkZ; z++) {
+                long key = getChunkKey(x * 16, z * 16);
+                Set<UUID> ids = chunkClaims.get(key);
+                if (ids != null) {
+                    ids.remove(claim.getId());
+                    if (ids.isEmpty()) {
+                        chunkClaims.remove(key);
+                    }
+                }
+            }
+        }
     }
 
     public void setPendingName(UUID playerId, String name) {
@@ -36,6 +76,7 @@ public class ClaimManager {
         plugin.getStorageManager().loadClaims().thenAccept(loadedClaims -> {
             for (Claim claim : loadedClaims) {
                 claims.put(claim.getId(), claim);
+                addToChunks(claim);
             }
             plugin.getLogger().info("Loaded " + claims.size() + " claims.");
         });
@@ -82,10 +123,14 @@ public class ClaimManager {
         int x = location.getBlockX();
         int z = location.getBlockZ();
 
-        // Linear search for now - can be optimized with a spatial data structure
-        // (QuadTree) later
-        for (Claim claim : claims.values()) {
-            if (claim.getWorldName().equals(worldName) && claim.contains(x, z)) {
+        long key = getChunkKey(x, z);
+        Set<UUID> claimIds = chunkClaims.get(key);
+        if (claimIds == null)
+            return null;
+
+        for (UUID id : claimIds) {
+            Claim claim = claims.get(id);
+            if (claim != null && claim.getWorldName().equals(worldName) && claim.contains(x, z)) {
                 return claim;
             }
         }
@@ -102,10 +147,25 @@ public class ClaimManager {
         int maxZ = Math.max(min.getBlockZ(), max.getBlockZ());
 
         // Check overlap
-        for (Claim existing : claims.values()) {
-            if (existing.getWorldName().equals(min.getWorld().getName())) {
-                if (isOverlapping(minX, minZ, maxX, maxZ, existing)) {
-                    return false; // Overlap
+        // Optimization: Only check claims in relevant chunks
+        int minChunkX = minX >> 4;
+        int minChunkZ = minZ >> 4;
+        int maxChunkX = maxX >> 4;
+        int maxChunkZ = maxZ >> 4;
+
+        for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+            for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+                long key = getChunkKey(cx * 16, cz * 16);
+                Set<UUID> ids = chunkClaims.get(key);
+                if (ids != null) {
+                    for (UUID id : ids) {
+                        Claim existing = claims.get(id);
+                        if (existing != null && existing.getWorldName().equals(min.getWorld().getName())) {
+                            if (isOverlapping(minX, minZ, maxX, maxZ, existing)) {
+                                return false; // Overlap
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -131,11 +191,26 @@ public class ClaimManager {
 
         // Check buffer
         int buffer = plugin.getConfigManager().getClaimBlockBuffer();
-        for (Claim existing : claims.values()) {
-            if (existing.getWorldName().equals(min.getWorld().getName())
-                    && !existing.getOwnerId().equals(player.getUniqueId())) {
-                if (isTooClose(minX, minZ, maxX, maxZ, existing, buffer)) {
-                    return false; // Too close
+        // Check buffer using chunks (expanded range)
+        int bufferMinChunkX = (minX - buffer) >> 4;
+        int bufferMinChunkZ = (minZ - buffer) >> 4;
+        int bufferMaxChunkX = (maxX + buffer) >> 4;
+        int bufferMaxChunkZ = (maxZ + buffer) >> 4;
+
+        for (int cx = bufferMinChunkX; cx <= bufferMaxChunkX; cx++) {
+            for (int cz = bufferMinChunkZ; cz <= bufferMaxChunkZ; cz++) {
+                long key = getChunkKey(cx * 16, cz * 16);
+                Set<UUID> ids = chunkClaims.get(key);
+                if (ids != null) {
+                    for (UUID id : ids) {
+                        Claim existing = claims.get(id);
+                        if (existing != null && existing.getWorldName().equals(min.getWorld().getName())
+                                && !existing.getOwnerId().equals(player.getUniqueId())) {
+                            if (isTooClose(minX, minZ, maxX, maxZ, existing, buffer)) {
+                                return false; // Too close
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -148,6 +223,7 @@ public class ClaimManager {
 
         Claim newClaim = new Claim(player.getUniqueId(), min.getWorld().getName(), minX, minZ, maxX, maxZ, name);
         claims.put(newClaim.getId(), newClaim);
+        addToChunks(newClaim);
 
         data.incrementClaimCount();
         saveData(); // Save immediately for safety
@@ -157,6 +233,7 @@ public class ClaimManager {
     public void deleteClaim(UUID claimId) {
         Claim claim = claims.remove(claimId);
         if (claim != null) {
+            removeFromChunks(claim);
             PlayerData data = getPlayerData(claim.getOwnerId());
             data.decrementClaimCount();
             saveData();
@@ -215,6 +292,11 @@ public class ClaimManager {
 
     public void setPlayerClaimLimit(UUID playerId, int limit) {
         getPlayerData(playerId).setMaxClaims(limit);
+        saveData();
+    }
+
+    public void setPlayerClaimAreaLimit(UUID playerId, int limit) {
+        getPlayerData(playerId).setMaxClaimArea(limit);
         saveData();
     }
 }

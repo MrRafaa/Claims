@@ -88,4 +88,8 @@ public class PartyGui implements GuiListener.ClaimsGui {
     public Inventory getInventory() {
         return inventory;
     }
+
+    public void open() {
+        player.openInventory(inventory);
+    }
 }
