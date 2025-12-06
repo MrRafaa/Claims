@@ -303,8 +303,7 @@ public class ClaimCommand implements CommandExecutor, TabCompleter {
         player.sendMessage("§6--- Claim Help ---");
         player.sendMessage("§e/claim create <name> §7- Get claim tool");
         player.sendMessage("§e/claim list §7- Manage your claims (GUI)");
-        player.sendMessage("§e/claim <name> trust <player> §7- Trust a player");
-        player.sendMessage("§e/claim <name> untrust <player> | all §7- Untrust a player or everyone");
+        player.sendMessage("§e/claim <name> trust | untrust <player> | all §7- Manage trust");
         player.sendMessage("§e/claim info §7- View claim info");
         player.sendMessage("§e/party §7- Party commands");
         if (player.hasPermission("claims.admin")) {
